@@ -42,7 +42,10 @@ public class DownloadServiceImpl implements DownloadService {
     @Autowired
     private FileMapper fileMapper;
 
-    private final OkHttpClient okHttpClient = OkHttpClientFactory.createClient();
+    // 修改为每次获取新的客户端实例，确保使用最新的代理配置
+    private OkHttpClient getOkHttpClient() {
+        return OkHttpClientFactory.createClient();
+    }
 
     /**
      * 下载文件
@@ -290,13 +293,17 @@ public class DownloadServiceImpl implements DownloadService {
     private InputStream downloadFileInputStream(String fileID) throws IOException {
         File file = botService.getFile(fileID);
         String fileUrl = botService.getFullDownloadPath(file);
+        log.info("下载文件URL: {}", fileUrl);
 
+        // 使用工厂方法获取客户端
+        OkHttpClient client = getOkHttpClient();
+        
         Request request = new Request.Builder()
                 .url(fileUrl)
                 .get()
                 .build();
 
-        Response response = okHttpClient.newCall(request).execute();
+        Response response = client.newCall(request).execute();
 
         if (!response.isSuccessful()) {
             log.error("无法下载文件，响应码：" + response.code());
@@ -353,12 +360,17 @@ public class DownloadServiceImpl implements DownloadService {
     private ResponseBody downloadFileByte(String partFileId) throws IOException {
         File partFile = botService.getFile(partFileId);
         String partFileUrl = botService.getFullDownloadPath(partFile);
+        log.info("下载分片文件URL: {}", partFileUrl);
+        
+        // 使用工厂方法获取客户端
+        OkHttpClient client = getOkHttpClient();
+        
         Request partRequest = new Request.Builder()
                 .url(partFileUrl)
                 .get()
                 .build();
 
-        Response response = okHttpClient.newCall(partRequest).execute();
+        Response response = client.newCall(partRequest).execute();
         if (!response.isSuccessful()) {
             log.error("无法下载分片文件，响应码：" + response.code());
             throw new IOException("无法下载分片文件，响应码：" + response.code());
