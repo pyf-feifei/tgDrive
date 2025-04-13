@@ -1,0 +1,4 @@
+# 生产环境特定配置
+telegram:
+  api:
+    base-url: https://api.telegram.org

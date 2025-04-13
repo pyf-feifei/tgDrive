@@ -25,8 +25,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;  // 添加这行
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import okhttp3.OkHttpClient;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.util.concurrent.TimeUnit; // 如果需要设置超时
+import com.skydevs.tgdrive.utils.OkHttpClientFactory;
 
 import java.io.*;
 import java.net.URL;
@@ -48,6 +54,8 @@ public class BotServiceImpl implements BotService {
     private ConfigService configService;
     @Autowired
     private FileMapper fileMapper;
+    @Value("${spring.profiles.active:prod}")  // 添加这行，默认为prod环境
+    private String activeProfile;
     private String botToken;
     private String chatId;
     private TelegramBot bot;
@@ -87,7 +95,55 @@ public class BotServiceImpl implements BotService {
             url = appConfig.getUrl();
         }
          */
-        bot = new TelegramBot(botToken);
+    
+
+               // --- 配置代理 ---
+        // 1. 定义 Clash 代理地址和端口 (请根据你的 Clash 设置修改)
+        final String proxyHost = "127.0.0.1";
+        final int proxyPort = 7890; // Clash 默认 HTTP/SOCKS 混合端口，通常用 HTTP 类型即可
+        log.info("配置 Telegram Bot 使用代理: {}:{}", proxyHost, proxyPort);
+        if ("dev".equals(activeProfile)) {
+            // try {
+            //     log.info("配置 Telegram Bot 使用代理: {}:{}", proxyHost, proxyPort);
+            //     Proxy clashProxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+
+            //     // 2. 创建配置了代理的 OkHttpClient
+            //     OkHttpClient customClient = new OkHttpClient.Builder() 
+            //             .proxy(clashProxy)
+            //             // 可选：设置更长的超时时间，以防代理网络慢
+            //             .connectTimeout(60, TimeUnit.SECONDS)
+            //             .writeTimeout(120, TimeUnit.SECONDS)
+            //             .readTimeout(120, TimeUnit.SECONDS)
+            //             .build();
+
+            //     // 3. 使用配置了代理的 Client 初始化 TelegramBot
+            //     //    注意：因为不再使用自定义 apiUrl，所以不需要 .apiUrl()
+            //     this.bot = new TelegramBot.Builder(this.botToken)
+            //                  .okHttpClient(customClient)
+            //                  .build();
+
+            //     log.info("Telegram Bot 使用自定义 OkHttpClient (带 Clash 代理) 初始化完成。");
+
+            // } catch (Exception e) { 
+            //      log.error("初始化 Telegram Bot (带代理) 时出错: {}", e.getMessage(), e);
+            //      // 根据需要处理初始化失败的情况，例如抛出异常
+            //      throw new RuntimeException("无法初始化带代理的 Telegram Bot", e);
+            // }
+            try {
+                // 使用工厂类创建OkHttpClient
+                OkHttpClient customClient = OkHttpClientFactory.createClient();
+                // 使用创建的Client初始化TelegramBot
+                this.bot = new TelegramBot.Builder(this.botToken)
+                             .okHttpClient(customClient)
+                             .build();
+                log.info("Telegram Bot 初始化完成。");
+            } catch (Exception e) { 
+                log.error("初始化 Telegram Bot 时出错: {}", e.getMessage(), e);
+                throw new RuntimeException("无法初始化 Telegram Bot", e);
+            }
+        } else {
+            this.bot = new TelegramBot(botToken);
+        }
     }
 
     /**
@@ -444,9 +500,43 @@ public class BotServiceImpl implements BotService {
      * @param m
      */
     public boolean sendMessage(String m) {
-        TelegramBot bot = new TelegramBot(botToken);
+        // TelegramBot bot = new TelegramBot(botToken);
+        if (this.bot == null) {
+            if ("dev".equals(activeProfile)) {
+                // // 开发环境使用代理配置
+                // try {
+                //     Proxy clashProxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 7890));
+                //     OkHttpClient customClient = new OkHttpClient.Builder() 
+                //             .proxy(clashProxy)
+                //             .connectTimeout(60, TimeUnit.SECONDS)
+                //             .writeTimeout(120, TimeUnit.SECONDS)
+                //             .readTimeout(120, TimeUnit.SECONDS)
+                //             .build();
+                //     this.bot = new TelegramBot.Builder(this.botToken)
+                //                  .okHttpClient(customClient)
+                //                  .build();
+                // } catch (Exception e) {
+                //     log.error("初始化代理Bot失败", e);
+                //     this.bot = new TelegramBot(botToken);
+                // }
+                try {
+                    // 使用工厂类创建OkHttpClient
+                    OkHttpClient customClient = OkHttpClientFactory.createClient();
+                    // 使用创建的Client初始化TelegramBot
+                    this.bot = new TelegramBot.Builder(this.botToken)
+                                 .okHttpClient(customClient)
+                                 .build();
+                    log.info("Telegram Bot 初始化完成。");
+                } catch (Exception e) { 
+                    log.error("初始化 Telegram Bot 时出错: {}", e.getMessage(), e);
+                    throw new RuntimeException("无法初始化 Telegram Bot", e);
+                }
+            } else {
+                this.bot = new TelegramBot(botToken);
+            }
+        }
         try {
-            bot.execute(new SendMessage(chatId, m));
+            this.bot.execute(new SendMessage(chatId, m));
         } catch (Exception e) {
             log.error("消息发送失败", e);
             return false;

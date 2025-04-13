@@ -1,0 +1,4 @@
+# 开发环境特定配置
+telegram:
+  api:
+    base-url: https://tgbot.barrierfree.ip-ddns.com
