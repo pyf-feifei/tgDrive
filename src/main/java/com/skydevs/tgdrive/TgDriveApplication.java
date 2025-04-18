@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class TgDriveApplication {
     public static void main(String[] args) {
-       SpringApplication.run(TgDriveApplication.class, args);
+        SpringApplication.run(TgDriveApplication.class, args);
     }
-
 }

@@ -7,9 +7,12 @@ CREATE TABLE IF NOT EXISTS files (
     full_size TEXT,
     file_id TEXT NOT NULL,
     webdav_path TEXT,
-    is_dir BOOLEAN DEFAULT FALSE
+    dir BOOLEAN DEFAULT FALSE,
+    media_type TEXT,           -- 新增：媒体类型，如video/mp4, audio/mpeg等
+    is_hls BOOLEAN DEFAULT FALSE  -- 新增：是否为HLS媒体文件
 );
 
+-- 其他表保持不变
 CREATE TABLE IF NOT EXISTS configs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

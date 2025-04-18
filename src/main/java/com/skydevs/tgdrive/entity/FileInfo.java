@@ -20,5 +20,9 @@ public class FileInfo {
     private String webdavPath;
 
     private boolean dir;
+    
+    // 新增媒体相关字段
+    private String mediaType;        // 媒体类型
+    private boolean isHLS;           // 是否为HLS媒体
 }
 
