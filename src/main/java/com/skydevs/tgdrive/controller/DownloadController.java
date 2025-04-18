@@ -20,10 +20,16 @@ public class DownloadController {
     @Autowired
     private DownloadService downloadService;
 
+    // 移除了未使用的依赖注入
+    // @Autowired
+    // private FileMapper fileMapper;
+    // 
+    // @Autowired
+    // private BotService botService;
+
     @GetMapping("/{fileID}")
     public CompletableFuture<ResponseEntity<StreamingResponseBody>> downloadFile(@PathVariable String fileID) {
         log.info("接收到下载请求，fileID: " + fileID);
         return CompletableFuture.supplyAsync(() -> downloadService.downloadFile(fileID));
     }
-
 }
