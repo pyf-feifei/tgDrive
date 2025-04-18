@@ -15,7 +15,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.concurrent.CompletableFuture;
 
-
 @RestController
 @Slf4j
 @RequestMapping("/api")
@@ -26,7 +25,6 @@ public class FileController {
     @Autowired
     private FileService fileService;
 
-
     /**
      * 上传文件
      *
@@ -34,7 +32,8 @@ public class FileController {
      * @return
      */
     @PostMapping("/upload")
-    public CompletableFuture<Result<UploadFile>> uploadFile(@RequestParam("file") MultipartFile multipartFile, HttpServletRequest request) {
+    public CompletableFuture<Result<UploadFile>> uploadFile(@RequestParam("file") MultipartFile multipartFile,
+            HttpServletRequest request) {
         return CompletableFuture.supplyAsync(() -> {
             if (multipartFile == null || multipartFile.isEmpty()) {
                 return Result.error("上传的文件为空");
@@ -59,9 +58,9 @@ public class FileController {
         }
     }
 
-
     /**
      * 获取文件列表
+     * 
      * @param page
      * @param size
      * @return
@@ -75,6 +74,7 @@ public class FileController {
 
     /**
      * 更新文件url
+     * 
      * @return
      */
     @SaCheckLogin
