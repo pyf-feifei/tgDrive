@@ -6,8 +6,9 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 public interface DownloadService {
     /**
      * 下载文件
+     * 
      * @param fileID
      * @return
      */
-    ResponseEntity<StreamingResponseBody> downloadFile(String fileID);
+    ResponseEntity<StreamingResponseBody> downloadFile(String fileID, Boolean isTs);
 }

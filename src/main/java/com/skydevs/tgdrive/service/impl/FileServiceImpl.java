@@ -37,6 +37,7 @@ public class FileServiceImpl implements FileService {
 
     /**
      * 获取文件分页
+     * 
      * @param page
      * @param size
      * @return
@@ -58,6 +59,7 @@ public class FileServiceImpl implements FileService {
 
     /**
      * 更新文件url
+     * 
      * @return
      */
     @Override
@@ -121,6 +123,7 @@ public class FileServiceImpl implements FileService {
 
     /**
      * WebDAV下载
+     * 
      * @param path 文件路径
      * @return
      */
@@ -131,7 +134,7 @@ public class FileServiceImpl implements FileService {
             if (fileInfo == null) {
                 return ResponseEntity.notFound().build();
             }
-            return downloadService.downloadFile(fileInfo.getFileId());
+            return downloadService.downloadFile(fileInfo.getFileId(), false);
         } catch (Exception e) {
             log.error("文件下载失败", e);
             return ResponseEntity.status(500).build();

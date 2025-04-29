@@ -10,28 +10,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.util.concurrent.CompletableFuture;
-
 @RestController
-@RequestMapping("/d")
+@RequestMapping("/ts")
 @Slf4j
-public class DownloadController {
+public class MediaStreamController {
 
     @Autowired
     private DownloadService downloadService;
-
-    // 移除了未使用的依赖注入
-    // @Autowired
-    // private FileMapper fileMapper;
-    //
-    // @Autowired
-    // private BotService botService;
-
-    @GetMapping("/{fileID}")
-    public CompletableFuture<ResponseEntity<StreamingResponseBody>> downloadFile(@PathVariable String fileID) {
-        log.info("接收到下载请求，fileID: " + fileID);
-        return CompletableFuture.supplyAsync(() -> downloadService.downloadFile(fileID, false));
-    }
 
     @GetMapping("/{fileID}/{segmentName}")
     public ResponseEntity<StreamingResponseBody> getMediaSegment(

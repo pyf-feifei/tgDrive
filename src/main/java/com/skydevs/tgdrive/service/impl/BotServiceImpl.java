@@ -25,17 +25,23 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;  // 添加这行
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import okhttp3.OkHttpClient;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.util.concurrent.TimeUnit; // 如果需要设置超时
+import java.util.concurrent.TimeUnit;
 import com.skydevs.tgdrive.utils.OkHttpClientFactory;
 
 import java.io.*;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -46,6 +52,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.*;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.atomic.AtomicInteger;
+
 @Service
 @Slf4j
 public class BotServiceImpl implements BotService {
@@ -54,7 +64,7 @@ public class BotServiceImpl implements BotService {
     private ConfigService configService;
     @Autowired
     private FileMapper fileMapper;
-    @Value("${spring.profiles.active:prod}")  // 添加这行，默认为prod环境
+    @Value("${spring.profiles.active:prod}")
     private String activeProfile;
     private String botToken;
     private String chatId;
@@ -64,11 +74,10 @@ public class BotServiceImpl implements BotService {
     // tg bot接口限制20MB，传10MB是最佳实践
     private final int MAX_FILE_SIZE = 10 * 1024 * 1024;
     /*
-    @Value("${server.port}")
-    private int serverPort;
-    private String url;
+     * @Value("${server.port}")
+     * private int serverPort;
+     * private String url;
      */
-
 
     /**
      * 设置基本配置
@@ -89,55 +98,55 @@ public class BotServiceImpl implements BotService {
             throw new GetBotTokenFailedException();
         }
         /*
-        if (appConfig.getUrl() == null || appConfig.getUrl().isEmpty()) {
-            url = "http://localhost:" + serverPort;
-        } else {
-            url = appConfig.getUrl();
-        }
+         * if (appConfig.getUrl() == null || appConfig.getUrl().isEmpty()) {
+         * url = "http://localhost:" + serverPort;
+         * } else {
+         * url = appConfig.getUrl();
+         * }
          */
-    
 
-               // --- 配置代理 ---
+        // --- 配置代理 ---
         // 1. 定义 Clash 代理地址和端口 (请根据你的 Clash 设置修改)
         final String proxyHost = "127.0.0.1";
         final int proxyPort = 7890; // Clash 默认 HTTP/SOCKS 混合端口，通常用 HTTP 类型即可
         log.info("配置 Telegram Bot 使用代理: {}:{}", proxyHost, proxyPort);
         if ("dev".equals(activeProfile)) {
             // try {
-            //     log.info("配置 Telegram Bot 使用代理: {}:{}", proxyHost, proxyPort);
-            //     Proxy clashProxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+            // log.info("配置 Telegram Bot 使用代理: {}:{}", proxyHost, proxyPort);
+            // Proxy clashProxy = new Proxy(Proxy.Type.HTTP, new
+            // InetSocketAddress(proxyHost, proxyPort));
 
-            //     // 2. 创建配置了代理的 OkHttpClient
-            //     OkHttpClient customClient = new OkHttpClient.Builder() 
-            //             .proxy(clashProxy)
-            //             // 可选：设置更长的超时时间，以防代理网络慢
-            //             .connectTimeout(60, TimeUnit.SECONDS)
-            //             .writeTimeout(120, TimeUnit.SECONDS)
-            //             .readTimeout(120, TimeUnit.SECONDS)
-            //             .build();
+            // // 2. 创建配置了代理的 OkHttpClient
+            // OkHttpClient customClient = new OkHttpClient.Builder()
+            // .proxy(clashProxy)
+            // // 可选：设置更长的超时时间，以防代理网络慢
+            // .connectTimeout(60, TimeUnit.SECONDS)
+            // .writeTimeout(120, TimeUnit.SECONDS)
+            // .readTimeout(120, TimeUnit.SECONDS)
+            // .build();
 
-            //     // 3. 使用配置了代理的 Client 初始化 TelegramBot
-            //     //    注意：因为不再使用自定义 apiUrl，所以不需要 .apiUrl()
-            //     this.bot = new TelegramBot.Builder(this.botToken)
-            //                  .okHttpClient(customClient)
-            //                  .build();
+            // // 3. 使用配置了代理的 Client 初始化 TelegramBot
+            // // 注意：因为不再使用自定义 apiUrl，所以不需要 .apiUrl()
+            // this.bot = new TelegramBot.Builder(this.botToken)
+            // .okHttpClient(customClient)
+            // .build();
 
-            //     log.info("Telegram Bot 使用自定义 OkHttpClient (带 Clash 代理) 初始化完成。");
+            // log.info("Telegram Bot 使用自定义 OkHttpClient (带 Clash 代理) 初始化完成。");
 
-            // } catch (Exception e) { 
-            //      log.error("初始化 Telegram Bot (带代理) 时出错: {}", e.getMessage(), e);
-            //      // 根据需要处理初始化失败的情况，例如抛出异常
-            //      throw new RuntimeException("无法初始化带代理的 Telegram Bot", e);
+            // } catch (Exception e) {
+            // log.error("初始化 Telegram Bot (带代理) 时出错: {}", e.getMessage(), e);
+            // // 根据需要处理初始化失败的情况，例如抛出异常
+            // throw new RuntimeException("无法初始化带代理的 Telegram Bot", e);
             // }
             try {
                 // 使用工厂类创建OkHttpClient
                 OkHttpClient customClient = OkHttpClientFactory.createClient();
                 // 使用创建的Client初始化TelegramBot
                 this.bot = new TelegramBot.Builder(this.botToken)
-                             .okHttpClient(customClient)
-                             .build();
+                        .okHttpClient(customClient)
+                        .build();
                 log.info("Telegram Bot 初始化完成。");
-            } catch (Exception e) { 
+            } catch (Exception e) {
                 log.error("初始化 Telegram Bot 时出错: {}", e.getMessage(), e);
                 throw new RuntimeException("无法初始化 Telegram Bot", e);
             }
@@ -165,7 +174,7 @@ public class BotServiceImpl implements BotService {
             while (true) {
                 // 用offset追踪buffer读了多少字节
                 int offset = 0;
-                while(offset < MAX_FILE_SIZE) {
+                while (offset < MAX_FILE_SIZE) {
                     int byteRead = bufferedInputStream.read(buffer, offset, MAX_FILE_SIZE - offset);
                     if (byteRead == -1) {
                         break;
@@ -251,8 +260,8 @@ public class BotServiceImpl implements BotService {
                 }
 
                 // 如果到这里，说明上传没有成功，需要重试
-                int exponentialDelay = baseDelay * (int)Math.pow(2, i); // 指数退避策略
-                log.warn("上传失败，正在准备第{}次重试，等待{}毫秒", (i+1), exponentialDelay);
+                int exponentialDelay = baseDelay * (int) Math.pow(2, i); // 指数退避策略
+                log.warn("上传失败，正在准备第{}次重试，等待{}毫秒", (i + 1), exponentialDelay);
                 Thread.sleep(exponentialDelay);
 
             } catch (NullPointerException e) {
@@ -267,8 +276,8 @@ public class BotServiceImpl implements BotService {
                 log.error("上传过程中发生未预期的异常: {}", e.getMessage(), e);
 
                 try {
-                    int exponentialDelay = baseDelay * (int)Math.pow(2, i); // 指数退避策略
-                    log.warn("发生异常，正在准备第{}次重试，等待{}毫秒", (i+1), exponentialDelay);
+                    int exponentialDelay = baseDelay * (int) Math.pow(2, i); // 指数退避策略
+                    log.warn("发生异常，正在准备第{}次重试，等待{}毫秒", (i + 1), exponentialDelay);
                     Thread.sleep(exponentialDelay);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
@@ -316,6 +325,7 @@ public class BotServiceImpl implements BotService {
 
     /**
      * 上传单文件（为了使gif能正常显示，gif上传到tg后，会被转换为MP4）
+     * 
      * @param inputStream
      * @param filename
      * @return
@@ -330,7 +340,7 @@ public class BotServiceImpl implements BotService {
             byte[] chunkData = buffer.toByteArray();
             return uploadChunk(chunkData, filename);
         } catch (IOException e) {
-            log.error("文件上传失败 :" + e.getMessage());
+            log.error("文件上传失败 :{}", e.getMessage());
             return null;
         }
     }
@@ -369,7 +379,14 @@ public class BotServiceImpl implements BotService {
             InputStream inputStream = multipartFile.getInputStream();
             String filename = multipartFile.getOriginalFilename();
             long size = multipartFile.getSize();
-            if (size > MAX_FILE_SIZE) {
+            String contentType = multipartFile.getContentType();
+
+            // 检查是否为视频或音频文件
+            if (isMediaFile(contentType)) {
+                // 处理媒体文件，使用HLS
+                return handleMediaFileUpload(inputStream, filename, size, contentType, prefix);
+            } else if (size > MAX_FILE_SIZE) {
+                // 处理大文件
                 List<String> fileIds = sendFileStreamInChunks(inputStream, filename);
                 String fileID = createRecordFile(filename, size, fileIds);
                 FileInfo fileInfo = FileInfo.builder()
@@ -383,6 +400,7 @@ public class BotServiceImpl implements BotService {
                 fileMapper.insertFile(fileInfo);
                 return prefix + "/d/" + fileID;
             } else {
+                // 处理小文件
                 // 小于10MB的GIF会被TG转换为MP4，对文件后缀进行处理
                 String uploadFilename = filename;
                 if (filename != null && filename.endsWith(".gif")) {
@@ -404,6 +422,247 @@ public class BotServiceImpl implements BotService {
             log.error("文件上传失败，响应信息：{}", e.getMessage());
             throw new RuntimeException("文件上传失败");
         }
+    }
+
+    /**
+     * 判断是否为媒体文件（视频或音频）
+     */
+    private boolean isMediaFile(String contentType) {
+        if (contentType == null)
+            return false;
+        return contentType.startsWith("video/") || contentType.startsWith("audio/");
+    }
+
+    /**
+     * 处理媒体文件上传，使用HLS
+     */
+    private String handleMediaFileUpload(InputStream inputStream, String filename, long size,
+            String contentType, String prefix) throws IOException {
+        // 1. 保存原始文件到临时目录
+        Path tempDir = Files.createTempDirectory("media_processing");
+        Path tempFile = tempDir.resolve(filename);
+        Files.copy(inputStream, tempFile);
+
+        // 生成唯一的哈希值作为文件标识，只使用前8位
+        String fileHash = generateFileHash(tempFile.toString()).substring(0, 8);
+        // 获取不带扩展名的文件名
+        String nameWithoutExt = filename;
+        int lastDotIndex = filename.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+            nameWithoutExt = filename.substring(0, lastDotIndex);
+        }
+        // 修改这行，只替换文件系统不安全的字符，保留中文等字符，限制基本文件名长度为20
+        String baseFileName = nameWithoutExt.replaceAll("[\\\\/:*?\"<>|]", "_");
+        if (baseFileName.length() > 20) {
+            baseFileName = baseFileName.substring(0, 20);
+        }
+        String filePrefix = baseFileName + "_" + fileHash;
+
+        // 2. 使用FFmpeg转换为HLS格式
+        String hlsOutputDir = tempDir.resolve("hls").toString();
+        Files.createDirectories(Paths.get(hlsOutputDir));
+
+        // 修改m3u8文件名，使用哈希值
+        String m3u8Filename = Paths.get(hlsOutputDir, "playlist.m3u8").toString();
+
+        // 调用FFmpeg进行转换
+        boolean conversionSuccess = convertToHLS(tempFile.toString(), hlsOutputDir, "playlist");
+        if (!conversionSuccess) {
+            throw new RuntimeException("媒体文件转换HLS失败");
+        }
+
+        // 3. 上传所有TS分片文件，使用新的命名方式
+        List<String> tsFileIds = new ArrayList<>();
+        List<String> tsFileNames = new ArrayList<>();
+        AtomicInteger tsIndex = new AtomicInteger(0);
+
+        Files.list(Paths.get(hlsOutputDir))
+                .filter(path -> path.toString().endsWith(".ts"))
+                .sorted() // 确保顺序
+                .forEach(tsFile -> {
+                    try {
+                        // 修改这里：使用更短的命名方式
+                        String tsFileName = filePrefix + "_" + tsIndex.getAndIncrement() + ".ts";
+                        tsFileNames.add(tsFileName);
+                        String tsFileId = uploadOneFile(Files.newInputStream(tsFile), tsFileName);
+                        tsFileIds.add(tsFileId);
+                    } catch (IOException e) {
+                        log.error("上传TS分片失败: {}", e.getMessage());
+                        throw new RuntimeException("上传TS分片失败", e);
+                    }
+                });
+
+        // 4. 读取并修改M3U8文件内容
+        String m3u8Content = new String(Files.readAllBytes(Paths.get(m3u8Filename)), StandardCharsets.UTF_8);
+        String modifiedM3u8 = updateM3U8ContentWithUrls(m3u8Content, tsFileNames, tsFileIds, prefix);
+
+        // 5. 上传M3U8文件，使用新的命名方式
+        String m3u8FileName = filePrefix + ".m3u8";
+        String m3u8FileId = uploadOneFile(
+                new ByteArrayInputStream(modifiedM3u8.getBytes(StandardCharsets.UTF_8)),
+                m3u8FileName);
+
+        // 6. 保存文件信息到数据库
+        FileInfo fileInfo = FileInfo.builder()
+                .fileId(m3u8FileId)
+                .size(UserFriendly.humanReadableFileSize(size))
+                .fullSize(size)
+                .uploadTime(LocalDateTime.now(ZoneOffset.UTC).toEpochSecond(ZoneOffset.UTC))
+                .downloadUrl(prefix + "/d/" + m3u8FileId)
+                .fileName(filename)
+                .mediaType(contentType)
+                .isHLS(true)
+                .build();
+        fileMapper.insertFile(fileInfo);
+
+        // 7. 清理临时文件
+        deleteDirectory(tempDir.toFile());
+
+        return prefix + "/d/" + m3u8FileId;
+    }
+
+    /**
+     * 更新M3U8内容，替换本地文件路径为实际URL
+     */
+    private String updateM3U8ContentWithUrls(String m3u8Content, List<String> tsFileNames, List<String> tsFileIds,
+            String prefix) {
+        String[] lines = m3u8Content.split("\n");
+        StringBuilder newContent = new StringBuilder();
+
+        int tsIndex = 0;
+        for (String line : lines) {
+            if (line.endsWith(".ts")) {
+                if (tsIndex < tsFileIds.size()) {
+                    // 存储相对路径格式：ts/fileId/index.ts
+                    String tsFileId = tsFileIds.get(tsIndex);
+                    newContent.append(tsFileId).append("/").append(tsIndex).append(".ts\n");
+                } else {
+                    log.error("TS文件索引超出范围: {} >= {}", tsIndex, tsFileIds.size());
+                    if (!tsFileIds.isEmpty()) {
+                        String lastTsFileId = tsFileIds.get(tsFileIds.size() - 1);
+                        newContent.append(lastTsFileId).append("\n");
+                    } else {
+                        newContent.append(line).append("\n");
+                    }
+                }
+                tsIndex++;
+            } else {
+                newContent.append(line).append("\n");
+            }
+        }
+
+        return newContent.toString();
+    }
+
+    /**
+     * 使用FFmpeg将媒体文件转换为HLS格式
+     */
+    private boolean convertToHLS(String inputFile, String outputDir, String playlistName) {
+        try {
+            log.info("开始执行FFmpeg转换，输入文件: {}, 输出目录: {}", inputFile, outputDir);
+            ProcessBuilder pb = new ProcessBuilder(
+                    "ffmpeg",
+                    "-i", inputFile,
+                    "-profile:v", "baseline", // 使用基本配置文件以提高兼容性
+                    "-level", "3.0",
+                    "-start_number", "0",
+                    "-hls_time", "60", // 每个片段60秒，减少分片数量
+                    "-hls_segment_size", "8000000", // 限制每个分片大小约8MB
+                    "-hls_list_size", "0", // 包含所有片段
+                    "-hls_flags", "independent_segments", // 确保每个分片可独立播放
+                    "-g", "60", // 关键帧间隔，与hls_time匹配
+                    "-sc_threshold", "0", // 禁用场景切换检测，减少分片数
+                    "-f", "hls",
+                    outputDir + "/" + playlistName + ".m3u8");
+
+            // 重定向错误流以捕获FFmpeg输出
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            // 读取并记录FFmpeg输出
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    log.debug("FFmpeg输出: {}", line);
+                }
+            }
+
+            int exitCode = process.waitFor();
+            log.info("FFmpeg进程退出，状态码: {}", exitCode);
+            return exitCode == 0;
+        } catch (Exception e) {
+            log.error("FFmpeg转换失败: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 更新M3U8内容，替换本地文件路径为fileId
+     */
+    private String updateM3U8Content(String m3u8Content, List<String> tsFileIds) {
+        String[] lines = m3u8Content.split("\n");
+        StringBuilder newContent = new StringBuilder();
+
+        int tsIndex = 0;
+        for (String line : lines) {
+            if (line.endsWith(".ts")) {
+                // 替换TS文件名为占位符，下载时会替换为实际URL
+                newContent.append("{{TS_FILE_").append(tsIndex).append("}}\n");
+                tsIndex++;
+            } else {
+                newContent.append(line).append("\n");
+            }
+        }
+
+        return newContent.toString();
+    }
+
+    /**
+     * 创建HLS记录文件
+     */
+    private String createHLSRecordFile(String originalFileName, long fileSize,
+            List<String> tsFileIds, String m3u8Content, String contentType) throws IOException {
+        // 创建HLS记录对象
+        BigFileInfo record = new BigFileInfo();
+        record.setFileName(originalFileName);
+        record.setFileSize(fileSize);
+        record.setFileIds(tsFileIds);
+        record.setRecordFile(true);
+        record.setHlsFile(true);
+        record.setM3u8Content(m3u8Content);
+        record.setContentType(contentType);
+
+        // 创建临时文件
+        Path tempDir = Files.createTempDirectory("tempDir");
+        String hashString = DigestUtil.sha256Hex(originalFileName);
+        Path tempFile = tempDir.resolve(hashString + ".hls.json");
+        Files.createFile(tempFile);
+
+        try {
+            String jsonString = JSON.toJSONString(record, true);
+            Files.write(Paths.get(tempFile.toUri()), jsonString.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            log.error("HLS记录文件生成失败" + e.getMessage());
+            throw new RuntimeException("HLS记录文件生成失败");
+        }
+
+        // 上传记录文件到Telegram
+        byte[] fileBytes = Files.readAllBytes(tempFile);
+        SendDocument sendDocument = new SendDocument(chatId, fileBytes)
+                .fileName(tempFile.getFileName().toString());
+
+        SendResponse response = bot.execute(sendDocument);
+        Message message = response.message();
+        String recordFileId = message.document().fileId();
+
+        log.info("HLS记录文件上传成功，File ID: " + recordFileId);
+
+        // 删除临时文件
+        Files.deleteIfExists(tempFile);
+        deleteDirectory(tempDir.toFile());
+
+        return recordFileId;
     }
 
     /**
@@ -429,7 +688,7 @@ public class BotServiceImpl implements BotService {
         Files.createFile(tempFile);
         try {
             String jsonString = JSON.toJSONString(record, true);
-            Files.write(Paths.get(tempFile.toUri()), jsonString.getBytes());
+            Files.write(Paths.get(tempFile.toUri()), jsonString.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             log.error("上传记录文件生成失败" + e.getMessage());
             throw new RuntimeException("上传文件生成失败");
@@ -448,6 +707,7 @@ public class BotServiceImpl implements BotService {
 
         // 删除本地临时文件
         Files.deleteIfExists(tempFile);
+        deleteDirectory(tempDir.toFile());
 
         return recordFileId;
     }
@@ -503,31 +763,15 @@ public class BotServiceImpl implements BotService {
         // TelegramBot bot = new TelegramBot(botToken);
         if (this.bot == null) {
             if ("dev".equals(activeProfile)) {
-                // // 开发环境使用代理配置
-                // try {
-                //     Proxy clashProxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", 7890));
-                //     OkHttpClient customClient = new OkHttpClient.Builder() 
-                //             .proxy(clashProxy)
-                //             .connectTimeout(60, TimeUnit.SECONDS)
-                //             .writeTimeout(120, TimeUnit.SECONDS)
-                //             .readTimeout(120, TimeUnit.SECONDS)
-                //             .build();
-                //     this.bot = new TelegramBot.Builder(this.botToken)
-                //                  .okHttpClient(customClient)
-                //                  .build();
-                // } catch (Exception e) {
-                //     log.error("初始化代理Bot失败", e);
-                //     this.bot = new TelegramBot(botToken);
-                // }
                 try {
                     // 使用工厂类创建OkHttpClient
                     OkHttpClient customClient = OkHttpClientFactory.createClient();
                     // 使用创建的Client初始化TelegramBot
                     this.bot = new TelegramBot.Builder(this.botToken)
-                                 .okHttpClient(customClient)
-                                 .build();
+                            .okHttpClient(customClient)
+                            .build();
                     log.info("Telegram Bot 初始化完成。");
-                } catch (Exception e) { 
+                } catch (Exception e) {
                     log.error("初始化 Telegram Bot 时出错: {}", e.getMessage(), e);
                     throw new RuntimeException("无法初始化 Telegram Bot", e);
                 }
@@ -545,7 +789,6 @@ public class BotServiceImpl implements BotService {
         return true;
     }
 
-
     /**
      * 获取bot token
      *
@@ -558,8 +801,9 @@ public class BotServiceImpl implements BotService {
 
     /**
      * 上传文件
+     * 
      * @param inputStream 文件输入流
-     * @param path 文件路径
+     * @param path        文件路径
      * @return
      */
     @Override
@@ -574,7 +818,6 @@ public class BotServiceImpl implements BotService {
             throw new RuntimeException("文件上传失败", e);
         }
     }
-
 
     @Override
     public String uploadFile(InputStream inputStream, String path, HttpServletRequest request) {
@@ -624,6 +867,50 @@ public class BotServiceImpl implements BotService {
         } catch (Exception e) {
             log.error("文件删除失败", e);
             throw new RuntimeException("文件删除失败", e);
+        }
+    }
+
+    /**
+     * 递归删除目录
+     */
+    private void deleteDirectory(java.io.File directory) {
+        if (directory.exists()) {
+            java.io.File[] files = directory.listFiles();
+            if (files != null) {
+                for (java.io.File file : files) {
+                    if (file.isDirectory()) {
+                        deleteDirectory(file);
+                    } else {
+                        file.delete();
+                    }
+                }
+            }
+            directory.delete();
+        }
+    }
+
+    /**
+     * 生成文件哈希值
+     * 
+     * @param filePath 文件路径
+     * @return 生成的哈希值
+     */
+    private String generateFileHash(String filePath) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest((filePath + System.currentTimeMillis()).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1)
+                    hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            log.error("生成文件哈希值失败: {}", e.getMessage());
+            // 使用时间戳作为备选方案
+            return Long.toHexString(System.currentTimeMillis());
         }
     }
 }

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS files (
 -- 其他表保持不变
 CREATE TABLE IF NOT EXISTS configs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL, 
     token TEXT NOT NULL,
     target INTEGER NOT NULL,
     url INTEGER,
