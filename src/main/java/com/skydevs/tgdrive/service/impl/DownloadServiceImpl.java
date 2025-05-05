@@ -49,13 +49,14 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 下载文件
+     * 
      * @param fileID
      * @return
      */
     @Override
     public ResponseEntity<StreamingResponseBody> downloadFile(String fileID) {
         try (InputStream inputStream = downloadFileInputStream(fileID);
-             ByteArrayOutputStream buffer = new ByteArrayOutputStream()){
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
             byte[] data = new byte[8192];
             int byteRead;
             while ((byteRead = inputStream.read(data)) != -1) {
@@ -64,7 +65,7 @@ public class DownloadServiceImpl implements DownloadService {
 
             byte[] inputData = buffer.toByteArray();
             try (InputStream inputStream1 = new ByteArrayInputStream(inputData);
-            InputStream inputStream2 = new ByteArrayInputStream(inputData)) {
+                    InputStream inputStream2 = new ByteArrayInputStream(inputData)) {
                 BigFileInfo record = parseBigFileInfo(inputStream1);
 
                 if (record != null && record.isRecordFile()) {
@@ -82,11 +83,13 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 处理小文件
+     * 
      * @param fileID
      * @param inputStream
      * @return
      */
-    private ResponseEntity<StreamingResponseBody> handleRegularFile(String fileID, InputStream inputStream, byte[] chunkData) {
+    private ResponseEntity<StreamingResponseBody> handleRegularFile(String fileID, InputStream inputStream,
+            byte[] chunkData) {
         log.info("文件不是记录文件，直接下载文件...");
 
         File file = botService.getFile(fileID);
@@ -134,6 +137,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 流数据处理
+     * 
      * @param inputStream
      * @param outputStream
      */
@@ -154,6 +158,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 处理大文件
+     * 
      * @param fileID
      * @param record
      * @return
@@ -181,6 +186,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 下载并合并分片文件
+     * 
      * @param partFileIds
      * @param outputStream
      */
@@ -204,7 +210,7 @@ public class DownloadServiceImpl implements DownloadService {
 
                 executorService.submit(() -> {
                     try (InputStream partInputStream = downloadFileByte(partFileId).byteStream();
-                         OutputStream pos = pipedOutputStream) {
+                            OutputStream pos = pipedOutputStream) {
                         byte[] buffer = new byte[8192];
                         int bytesRead;
                         while ((bytesRead = partInputStream.read(buffer)) != -1) {
@@ -242,11 +248,13 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 处理客户端终止连接异常
+     * 
      * @param e
      */
     private void handleClientAbortException(IOException e) {
         String message = e.getMessage();
-        if (message != null && (message.contains("An established connection was aborted") || message.contains("你的主机中的软件中止了一个已建立的连接"))) {
+        if (message != null && (message.contains("An established connection was aborted")
+                || message.contains("你的主机中的软件中止了一个已建立的连接"))) {
             log.info("客户端中止了连接：{}", message);
         } else {
             log.error("写入输出流时发生 IOException", e);
@@ -256,6 +264,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 处理文件名
+     * 
      * @param fileID
      * @param defaultName
      * @return
@@ -271,6 +280,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 尝试转换为大文件的记录文件
+     * 
      * @param inputStream 下载的文件的输入流
      * @return BigFilInfo
      */
@@ -286,6 +296,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     /**
      * 下载文件并转换为流处理
+     * 
      * @param fileID
      * @return
      * @throws IOException
@@ -297,7 +308,7 @@ public class DownloadServiceImpl implements DownloadService {
 
         // 使用工厂方法获取客户端
         OkHttpClient client = getOkHttpClient();
-        
+
         Request request = new Request.Builder()
                 .url(fileUrl)
                 .get()
@@ -335,12 +346,17 @@ public class DownloadServiceImpl implements DownloadService {
                 headers.setContentLength(size);
             }
 
+            // 添加对Range请求的支持
+            headers.set(HttpHeaders.ACCEPT_RANGES, "bytes");
+
             if (contentType.startsWith("image/") || contentType.startsWith("video/")) {
                 // 对于图片和视频，设置 Content-Disposition 为 inline
-                headers.setContentDisposition(ContentDisposition.inline().filename(filename, StandardCharsets.UTF_8).build());
+                headers.setContentDisposition(
+                        ContentDisposition.inline().filename(filename, StandardCharsets.UTF_8).build());
             } else {
                 // 使用 URLEncoder 编码文件名，确保支持中文
-                String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8.toString()).replace("+", "%20");
+                String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8.toString()).replace("+",
+                        "%20");
                 String contentDisposition = "attachment; filename*=UTF-8''" + encodedFilename;
                 headers.set(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
             }
@@ -361,10 +377,10 @@ public class DownloadServiceImpl implements DownloadService {
         File partFile = botService.getFile(partFileId);
         String partFileUrl = botService.getFullDownloadPath(partFile);
         log.info("下载分片文件URL: {}", partFileUrl);
-        
+
         // 使用工厂方法获取客户端
         OkHttpClient client = getOkHttpClient();
-        
+
         Request partRequest = new Request.Builder()
                 .url(partFileUrl)
                 .get()
